@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>10 - Advanced Search v10.0</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800;900&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; background-color: #F2F4F8; color: #1e293b; overflow: hidden; cursor: none; }
+
+        /* 커서 */
+        .cursor-dot { width: 8px; height: 8px; background: #000; position: fixed; top: 0; left: 0; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; z-index: 9999; }
+        .cursor-outline { width: 40px; height: 40px; border: 1.5px solid #000; position: fixed; top: 0; left: 0; transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none; z-index: 9998; transition: width 0.2s, height 0.2s; }
+        .cursor-hover { width: 60px !important; height: 60px !important; background-color: rgba(0,0,0,0.05); border-color: transparent; }
+        
+        /* 유틸리티 */
+        .brand-font { font-weight: 900; letter-spacing: -0.05em; line-height: 0.9; }
+        .no-scrollbar::-webkit-scrollbar { width: 0px; }
+        .shadow-soft { box-shadow: 0 10px 40px -10px rgba(0,0,0,0.08); }
+        .hashtag { color: #2563eb; font-weight: 700; cursor: pointer; }
+        .hashtag:hover { text-decoration: underline; }
+
+        /* 트랜지션 & 모달 */
+        .shutter-container { position: fixed; inset: 0; z-index: 9995; pointer-events: none; display: flex; }
+        .shutter-col { flex: 1; height: 100%; background: #1e293b; transform: translateY(-100%); }
+        .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid rgba(255,255,255,0.5); }
+        .modal-backdrop { background: rgba(0,0,0,0.3); backdrop-filter: blur(5px); }
+        #comment-drawer { transform: translateY(105%); transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        #comment-drawer.open { transform: translateY(0%); }
+        
+        @keyframes like-bounce { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
+        .animate-like { animation: like-bounce 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    </style>
+</head>
+<body class="antialiased text-slate-800">
+
+    <div class="shutter-container" id="shutter-overlay">
+        <div class="shutter-col"></div><div class="shutter-col"></div><div class="shutter-col"></div><div class="shutter-col"></div>
+    </div>
+
+    <div class="cursor-dot hidden lg:block"></div>
+    <div class="cursor-outline hidden lg:block"></div>
+
+    <!-- ================= 1. 로그인 ================= -->
+    <section id="login-view" class="fixed inset-0 z-50 bg-[#F2F4F8] flex flex-col items-center justify-center overflow-hidden">
+        <div class="w-full max-w-md px-8 flex flex-col items-center z-10">
+            <h1 class="brand-font text-[10rem] mb-6 select-none hover-target text-slate-900"><span class="digit-1 inline-block">1</span><span class="digit-0 inline-block">0</span></h1>
+            <div class="w-full space-y-6 auth-ui opacity-0 relative bg-white p-8 rounded-3xl shadow-soft">
+                <div id="form-login" class="w-full flex flex-col gap-4">
+                    <p class="text-xs font-bold text-slate-400 tracking-widest mb-2">WELCOME BACK</p>
+                    <input type="text" id="signin-id" placeholder="ID" class="w-full bg-slate-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-slate-200 hover-target font-bold" autocomplete="off">
+                    <input type="password" id="signin-pw" placeholder="PASSWORD" class="w-full bg-slate-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-slate-200 hover-target font-bold">
+                    <button onclick="handleLogin()" class="hover-target mt-2 bg-slate-900 text-white font-bold py-4 rounded-xl hover:scale-[1.02] transition-transform">LOG IN</button>
+                    <p class="text-center text-xs text-slate-400 mt-2">New here? <span onclick="toggleAuthMode()" class="text-slate-900 font-bold cursor-pointer hover:underline hover-target">Sign up</span></p>
+                    <div class="flex items-center gap-3 my-2"><div class="h-px bg-slate-100 flex-1"></div><span class="text-[10px] text-slate-400 font-bold">OR</span><div class="h-px bg-slate-100 flex-1"></div></div>
+                    <button onclick="enterAsGuest()" class="w-full py-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors hover-target">Look around as Guest</button>
+                    <div class="border-t border-slate-100 pt-4">
+                        <button onclick="document.getElementById('import-file').click()" class="w-full py-2 text-xs font-bold text-slate-400 hover:text-slate-700 transition-colors hover-target flex items-center justify-center gap-2"><i class="ph-bold ph-upload-simple"></i> Restore Data</button>
+                    </div>
+                </div>
+                <div id="form-register" class="w-full flex flex-col gap-4 hidden">
+                    <p class="text-xs font-bold text-slate-400 tracking-widest mb-2">CREATE ACCOUNT</p>
+                    <input type="text" id="signup-id" placeholder="ID" class="w-full bg-slate-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-slate-200 hover-target font-bold">
+                    <input type="text" id="signup-name" placeholder="Display Name" class="w-full bg-slate-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-slate-200 hover-target font-bold">
+                    <input type="password" id="signup-pw" placeholder="Password" class="w-full bg-slate-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-slate-200 hover-target font-bold">
+                    <button onclick="handleRegister()" class="hover-target mt-2 bg-slate-900 text-white font-bold py-4 rounded-xl hover:scale-[1.02] transition-transform">REGISTER</button>
+                    <p class="text-center text-xs text-slate-400 mt-2">Have account? <span onclick="toggleAuthMode()" class="text-slate-900 font-bold cursor-pointer hover:underline hover-target">Log in</span></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================= 2. 메인 앱 ================= -->
+    <div id="app-view" class="fixed inset-0 flex flex-col lg:flex-row hidden opacity-0">
+        
+        <!-- [LEFT] 사이드바 -->
+        <aside class="w-full lg:w-[280px] h-auto lg:h-full bg-white border-r border-slate-100 flex flex-col p-6 z-20">
+            <div class="flex justify-between items-center lg:items-start lg:flex-col lg:mb-12">
+                <div class="brand-font text-4xl cursor-pointer hover-target mb-8" onclick="switchPage('home')">10.</div>
+                <nav class="hidden lg:flex flex-col space-y-2 w-full">
+                    <button onclick="switchPage('home')" class="flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors hover-target group text-slate-400" id="nav-home">
+                        <i class="ph-bold ph-house text-xl group-hover:scale-110 transition-transform"></i> <span class="font-bold">Home</span>
+                    </button>
+                    <button onclick="switchPage('search')" class="flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors hover-target group text-slate-400" id="nav-search">
+                        <i class="ph-bold ph-magnifying-glass text-xl group-hover:scale-110 transition-transform"></i> <span class="font-bold">Search</span>
+                    </button>
+                    <button onclick="switchPage('profile', null)" class="flex items-center gap-4 px-4 py-3 rounded-xl hover:bg-slate-50 transition-colors hover-target group text-slate-400" id="nav-profile">
+                        <i class="ph-bold ph-user text-xl group-hover:scale-110 transition-transform"></i> <span class="font-bold">Profile</span>
+                    </button>
+                </nav>
+            </div>
+            <div class="hidden lg:flex flex-col mt-auto">
+                <div class="mb-4 flex gap-2">
+                    <button onclick="exportData()" class="flex-1 py-2 bg-slate-100 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-colors hover-target flex items-center justify-center gap-1" title="Backup"><i class="ph-bold ph-download-simple"></i> Backup</button>
+                    <button onclick="document.getElementById('import-file').click()" class="flex-1 py-2 bg-slate-100 rounded-lg text-[10px] font-bold text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-colors hover-target flex items-center justify-center gap-1" title="Restore"><i class="ph-bold ph-upload-simple"></i> Restore</button>
+                    <input type="file" id="import-file" class="hidden" accept=".json" onchange="importData(this)">
+                </div>
+                <div class="bg-slate-50 p-4 rounded-2xl mb-4">
+                    <div class="flex items-center gap-3 mb-3 cursor-pointer hover-target" onclick="switchPage('profile', null)">
+                        <div class="w-10 h-10 rounded-full text-white flex items-center justify-center font-bold shadow-md" id="my-avatar-sidebar" style="background-color: #cbd5e1;">G</div>
+                        <div><p class="font-bold text-sm text-slate-900" id="my-username-sidebar">Guest</p><p class="text-xs text-slate-400">View Profile</p></div>
+                    </div>
+                    <button onclick="if(requireAuth()) createPostModal()" class="w-full bg-slate-900 text-white py-2 rounded-lg font-bold text-xs hover:scale-[1.02] transition-transform hover-target">WRITE LOG</button>
+                </div>
+                <button id="auth-action-btn" onclick="handleLogout()" class="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-500 font-bold text-sm transition-colors hover-target"><i class="ph-bold ph-sign-out text-lg"></i> Log out</button>
+            </div>
+        </aside>
+
+        <!-- [RIGHT] 메인 콘텐츠 -->
+        <main class="flex-1 h-full relative overflow-hidden flex flex-col bg-[#F2F4F8]">
+            <div id="scroll-container" class="flex-1 overflow-y-auto p-4 lg:p-8 pb-32 no-scrollbar">
+                <div id="main-content" class="max-w-6xl mx-auto"></div>
+            </div>
+            <!-- 댓글 Drawer -->
+            <div id="comment-drawer" class="absolute inset-x-0 bottom-0 h-[80%] glass-panel rounded-t-[2.5rem] shadow-2xl z-40 flex flex-col">
+                <div class="w-full flex justify-center pt-4 pb-2 cursor-pointer hover-target" onclick="closeComments()"><div class="w-16 h-1.5 bg-slate-300 rounded-full"></div></div>
+                <div class="px-8 py-4 border-b border-slate-100 flex justify-between items-center bg-white/50"><h3 class="font-bold text-xl text-slate-800">Comments</h3><button onclick="closeComments()" class="p-2 hover:bg-slate-100 rounded-full hover-target"><i class="ph-bold ph-x text-xl"></i></button></div>
+                <div class="flex-1 overflow-y-auto p-8 space-y-6 no-scrollbar" id="comment-list"></div>
+                <div class="p-6 border-t border-slate-100 bg-white pb-10 lg:pb-6"><div class="flex items-center gap-3"><input type="text" id="comment-input" placeholder="Add a comment..." class="flex-1 bg-slate-100 rounded-2xl px-5 py-3 text-sm outline-none focus:ring-2 focus:ring-slate-900 hover-target" onkeypress="if(event.key==='Enter') submitComment()"><button onclick="submitComment()" class="hover-target p-3 bg-slate-900 text-white rounded-xl"><i class="ph-bold ph-paper-plane-right"></i></button></div></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <div id="login-required-modal" class="fixed inset-0 z-50 modal-backdrop flex items-center justify-center hidden opacity-0"><div class="bg-white rounded-3xl p-8 w-80 shadow-soft text-center transform scale-90 transition-all"><div class="w-14 h-14 bg-slate-100 text-slate-900 rounded-full flex items-center justify-center mx-auto mb-4"><i class="ph-bold ph-lock-key text-2xl"></i></div><h3 class="text-lg font-bold mb-2 text-slate-900">Login Required</h3><p class="text-xs text-slate-500 mb-6 leading-relaxed">You need to be logged in.</p><div class="flex gap-3 justify-center"><button onclick="closeLoginReqModal()" class="flex-1 py-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold hover-target text-slate-500">Cancel</button><button onclick="handleLogout()" class="flex-1 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold hover-target shadow-lg">Log In</button></div></div></div>
+    <div id="write-modal" class="fixed inset-0 z-50 modal-backdrop flex items-center justify-center hidden opacity-0"><div class="bg-white rounded-3xl p-6 w-full max-w-lg shadow-soft transform scale-95 transition-all"><h3 class="font-bold text-lg mb-4">Create New Log</h3><textarea id="post-content" rows="4" placeholder="What's on your mind? Use #hashtags." class="w-full bg-slate-50 rounded-2xl p-4 outline-none resize-none text-slate-800 placeholder-slate-400 font-medium"></textarea><div id="image-preview-area" class="relative hidden mt-3"><img id="image-preview" src="" class="w-full h-40 object-cover rounded-xl"><button onclick="clearImage()" class="absolute top-2 right-2 bg-black/50 text-white w-6 h-6 rounded-full flex items-center justify-center hover:bg-black"><i class="ph-bold ph-x text-xs"></i></button></div><div class="flex justify-between items-center mt-4"><label for="file-upload" class="p-2 hover:bg-slate-100 rounded-full cursor-pointer hover-target text-slate-400 hover:text-slate-900 transition-colors"><i class="ph-bold ph-image text-xl"></i></label><input type="file" id="file-upload" accept="image/*" class="hidden" onchange="handleImageSelect(this)"><div class="flex gap-3"><button onclick="closeWriteModal()" class="px-4 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl hover-target">Cancel</button><button onclick="createPost()" class="px-6 py-2 bg-slate-900 text-white text-sm font-bold rounded-xl hover-target hover:scale-105 transition-transform">Post</button></div></div></div></div>
+    <div id="edit-modal" class="fixed inset-0 z-50 modal-backdrop flex items-center justify-center hidden opacity-0"><div class="bg-white rounded-3xl p-8 w-full max-w-md shadow-soft transform scale-95 transition-transform"><h3 class="text-xl font-bold mb-6 text-slate-900">Customize Profile</h3><div class="space-y-4"><div><label class="text-[10px] font-bold text-slate-400 tracking-widest">DISPLAY NAME</label><input type="text" id="edit-name" class="w-full bg-slate-50 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-slate-300 font-bold"></div><div><label class="text-[10px] font-bold text-slate-400 tracking-widest">BIO</label><input type="text" id="edit-bio" class="w-full bg-slate-50 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-slate-300 font-medium"></div><div><label class="text-[10px] font-bold text-slate-400 tracking-widest">BANNER URL</label><input type="text" id="edit-banner" class="w-full bg-slate-50 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-slate-300 text-xs"></div><div><label class="text-[10px] font-bold text-slate-400 tracking-widest">THEME COLOR</label><div class="flex gap-3 mt-2"><button onclick="setEditColor('#0f172a')" class="w-8 h-8 rounded-full bg-slate-900 ring-2 ring-offset-2 ring-transparent focus:ring-slate-300 hover-target"></button><button onclick="setEditColor('#3b82f6')" class="w-8 h-8 rounded-full bg-blue-500 ring-2 ring-offset-2 ring-transparent focus:ring-blue-300 hover-target"></button><button onclick="setEditColor('#8b5cf6')" class="w-8 h-8 rounded-full bg-violet-500 ring-2 ring-offset-2 ring-transparent focus:ring-violet-300 hover-target"></button><button onclick="setEditColor('#ec4899')" class="w-8 h-8 rounded-full bg-pink-500 ring-2 ring-offset-2 ring-transparent focus:ring-pink-300 hover-target"></button></div></div></div><div class="flex justify-end gap-3 mt-8"><button onclick="closeEditModal()" class="px-5 py-2 rounded-xl hover:bg-slate-100 font-bold text-sm hover-target text-slate-500">Cancel</button><button onclick="saveProfileChanges()" class="px-5 py-2 bg-slate-900 text-white rounded-xl font-bold text-sm hover-target shadow-lg shadow-slate-200">Save</button></div></div></div>
+    <div id="delete-modal" class="fixed inset-0 z-50 modal-backdrop flex items-center justify-center hidden opacity-0"><div class="bg-white rounded-3xl p-8 w-80 shadow-soft text-center transform scale-90 transition-all"><div class="w-14 h-14 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4"><i class="ph-bold ph-trash text-2xl"></i></div><h3 class="text-lg font-bold mb-2 text-slate-900">Delete this log?</h3><p class="text-xs text-slate-500 mb-6 leading-relaxed">This action cannot be undone.</p><div class="flex gap-3 justify-center"><button onclick="closeDeleteModal()" class="flex-1 py-3 rounded-xl border border-slate-200 hover:bg-slate-50 text-xs font-bold hover-target text-slate-500">Cancel</button><button onclick="confirmDelete()" class="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-bold hover-target shadow-lg shadow-red-200">Delete</button></div></div></div>
+
+    <script>
+        // ================= STATE & LOGIC =================
+        let currentUser = null;
+        let targetProfileUser = null;
+        let users = JSON.parse(localStorage.getItem('sys10_users')) || [];
+        let posts = JSON.parse(localStorage.getItem('sys10_posts')) || [
+            { id: 1, userId: 'admin', name: "System 10", content: "v10.0: Advanced Search & Trend Analysis added. Try searching #hashtags.", time: "Notice", likes: [], comments: [], image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop" }
+        ];
+        let currentView = 'home';
+        let profileTab = 'all';
+        let searchFilter = 'latest';
+        let currentSearchQuery = '';
+        let tempColor = '#0f172a';
+        let isTransitioning = false;
+        let currentOpenPostId = null;
+        let deleteTargetId = null;
+
+        function saveAll() {
+            localStorage.setItem('sys10_users', JSON.stringify(users));
+            localStorage.setItem('sys10_posts', JSON.stringify(posts));
+        }
+
+        // --- Trend Analysis Algorithm ---
+        function getTrendingHashtags() {
+            const tagCounts = {};
+            posts.forEach(post => {
+                const tags = post.content.match(/#[\w가-힣]+/g);
+                if (tags) {
+                    tags.forEach(tag => {
+                        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+                    });
+                }
+            });
+            return Object.entries(tagCounts)
+                .sort((a, b) => b[1] - a[1]) // Sort by count desc
+                .slice(0, 5); // Top 5
+        }
+
+        // Data Management
+        function exportData(){const d={users,posts};const b=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`sys10_bk.json`;document.body.appendChild(a);a.click();document.body.removeChild(a);}
+        function importData(i){if(!i.files[0])return;const r=new FileReader();r.onload=e=>{try{const d=JSON.parse(e.target.result);if(d.users&&d.posts){users=d.users;posts=d.posts;saveAll();alert("Restored!");location.reload();}else alert("Invalid.");}catch(x){alert("Error.");}};r.readAsText(i.files[0]);}
+
+        // ================= AUTH =================
+        function toggleAuthMode() { const l=document.getElementById('form-login'), r=document.getElementById('form-register'); if(l.classList.contains('hidden')){r.classList.add('hidden');l.classList.remove('hidden');}else{l.classList.add('hidden');r.classList.remove('hidden');} }
+        function handleRegister() { const id=document.getElementById('signup-id').value.trim(), name=document.getElementById('signup-name').value.trim(), pw=document.getElementById('signup-pw').value.trim(); if(!id||!name||!pw)return alert("Fill fields"); if(users.find(u=>u.id===id))return alert("ID taken"); users.push({id,name,pw,bio:"Digital Explorer.",color:"#0f172a",banner:""}); saveAll(); alert("Joined."); toggleAuthMode(); }
+        function handleLogin() { const id=document.getElementById('signin-id').value.trim(), pw=document.getElementById('signin-pw').value.trim(); const user=users.find(u=>u.id===id && u.pw===pw); if(user){currentUser=user; startApp();} else gsap.to("#form-login",{x:5,duration:0.1,yoyo:true,repeat:3}); }
+        function enterAsGuest() { currentUser = null; startApp(); }
+        function startApp() { updateSidebar(); gsap.to("#login-view",{yPercent:-100,duration:1.2,ease:"power4.inOut"}); document.getElementById('app-view').classList.remove('hidden'); gsap.to("#app-view",{opacity:1,duration:0.8,delay:0.5}); switchPage('home'); }
+        function handleLogout() { gsap.to("#app-view", { opacity: 0, duration: 0.5, onComplete: () => { document.getElementById('app-view').classList.add('hidden'); document.getElementById('login-view').classList.remove('hidden'); gsap.to("#login-view", { yPercent: 0, duration: 0.8, ease: "power4.out" }); document.getElementById('signin-pw').value = ""; currentUser = null; targetProfileUser = null; closeLoginReqModal(); }}); }
+        function updateSidebar() {
+            const nameEl=document.getElementById('my-username-sidebar'), avatarEl=document.getElementById('my-avatar-sidebar'), authBtn=document.getElementById('auth-action-btn');
+            if (currentUser) { nameEl.innerText=currentUser.name; avatarEl.innerText=currentUser.name[0].toUpperCase(); avatarEl.style.backgroundColor=currentUser.color; authBtn.innerHTML=`<i class="ph-bold ph-sign-out text-lg"></i> Log out`; } 
+            else { nameEl.innerText="Guest"; avatarEl.innerText="G"; avatarEl.style.backgroundColor="#cbd5e1"; authBtn.innerHTML=`<i class="ph-bold ph-sign-in text-lg"></i> Log In`; }
+        }
+        function requireAuth() { if (!currentUser) { const m=document.getElementById('login-required-modal'); m.classList.remove('hidden'); gsap.to(m,{opacity:1,duration:0.2}); gsap.fromTo(m.firstElementChild,{scale:0.9,y:20},{scale:1,y:0,duration:0.3,ease:"back.out"}); return false; } return true; }
+        function closeLoginReqModal() { const m=document.getElementById('login-required-modal'); gsap.to(m,{opacity:0,duration:0.2,onComplete:()=>m.classList.add('hidden')}); }
+
+        // ================= NAVIGATION & RENDERER =================
+        function switchPage(view, targetId = null) {
+            if(isTransitioning) return; isTransitioning=true;
+            if(view === 'profile') targetProfileUser = targetId ? (users.find(u=>u.id===targetId) || currentUser) : currentUser;
+            if(view === 'search') { currentSearchQuery = ''; searchFilter = 'latest'; } // Reset search on enter
+
+            document.querySelectorAll('nav button').forEach(b=>{b.classList.remove('text-slate-900','bg-slate-50');b.classList.add('text-slate-400');});
+            const n=document.getElementById(`nav-${view}`); if(n) n.classList.add('text-slate-900','bg-slate-50');
+            
+            const tl=gsap.timeline({onComplete:()=>{ renderContent(view); gsap.to(".shutter-col",{height:0,duration:0.5,stagger:0.05,ease:"power2.inOut",onComplete:()=>{gsap.set(".shutter-col",{height:"100%",yPercent:-100});isTransitioning=false;}}); }});
+            gsap.set(".shutter-col",{height:"100%",yPercent:-100}); tl.to(".shutter-col",{yPercent:0,duration:0.5,stagger:0.05,ease:"power2.inOut"});
+        }
+
+        function renderContent(view) {
+            currentView = view; const main = document.getElementById('main-content'); main.innerHTML = "";
+
+            // --- HOME VIEW ---
+            if (view === 'home') {
+                // Generate Trend HTML dynamically
+                const trends = getTrendingHashtags();
+                const trendHTML = trends.map((t, i) => createTrendItem(i+1, t[0], t[1]+" posts")).join('');
+                
+                main.innerHTML = `
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="lg:col-span-2">
+                            <h2 class="text-2xl font-black mb-6">Timeline</h2>
+                            <div id="feed-grid" class="grid grid-cols-1 gap-6"></div>
+                        </div>
+                        <div class="lg:col-span-1 hidden lg:block">
+                            <div class="sticky top-0 pt-14">
+                                <div class="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+                                    <h3 class="font-bold text-lg mb-4 flex items-center gap-2"><i class="ph-fill ph-fire text-red-500"></i> Trending Now</h3>
+                                    <div class="space-y-4">${trendHTML || "<div class='text-sm text-slate-400'>No trends yet.</div>"}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                const grid = document.getElementById('feed-grid');
+                posts.forEach(p => grid.appendChild(createPostCard(p)));
+            }
+            // --- SEARCH VIEW ---
+            else if (view === 'search') {
+                const trends = getTrendingHashtags();
+                const tagsHTML = trends.map(t => `<span onclick="runSearch('${t[0]}')" class="px-4 py-2 bg-white rounded-full text-sm font-bold text-slate-600 hover:text-blue-600 hover:shadow-md transition-all cursor-pointer border border-slate-100">${t[0]}</span>`).join('');
+
+                main.innerHTML = `
+                    <div class="max-w-3xl mx-auto">
+                        <div class="mb-8">
+                            <h2 class="text-2xl font-black mb-6">Search</h2>
+                            <div class="relative">
+                                <i class="ph-bold ph-magnifying-glass absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 text-xl"></i>
+                                <input type="text" id="search-input" placeholder="Search keywords or #hashtags" class="w-full bg-white rounded-2xl pl-14 pr-6 py-4 text-lg outline-none shadow-sm focus:shadow-md transition-shadow font-medium" onkeyup="handleSearchInput(this)">
+                            </div>
+                            <div class="flex gap-3 mt-6 flex-wrap">${tagsHTML}</div>
+                        </div>
+                        
+                        <div id="search-filters" class="flex gap-4 mb-6 hidden">
+                            <button onclick="setSearchFilter('latest')" id="filter-latest" class="px-4 py-2 rounded-lg text-sm font-bold bg-slate-900 text-white transition-colors">Latest</button>
+                            <button onclick="setSearchFilter('popular')" id="filter-popular" class="px-4 py-2 rounded-lg text-sm font-bold bg-white text-slate-500 hover:bg-slate-100 transition-colors">Popular</button>
+                            <button onclick="setSearchFilter('media')" id="filter-media" class="px-4 py-2 rounded-lg text-sm font-bold bg-white text-slate-500 hover:bg-slate-100 transition-colors">Media</button>
+                        </div>
+
+                        <div id="search-results" class="grid grid-cols-1 gap-6">
+                            <div class="text-center py-20 text-slate-400">Try searching for something...</div>
+                        </div>
+                    </div>
+                `;
+            }
+            // --- PROFILE VIEW ---
+            else if (view === 'profile') {
+                if (!targetProfileUser) {
+                    main.innerHTML = `<div class="flex flex-col items-center justify-center h-[60vh] text-center"><div class="w-20 h-20 bg-slate-200 rounded-full flex items-center justify-center mb-6 text-slate-400 text-4xl"><i class="ph-bold ph-user"></i></div><h2 class="text-2xl font-bold mb-2">Guest Mode</h2><p class="text-slate-500 mb-6">Log in to view your profile.</p><button onclick="handleLogout()" class="bg-slate-900 text-white px-8 py-3 rounded-xl font-bold shadow-lg hover:scale-105 transition-transform">Log In</button></div>`;
+                    return;
+                }
+                const isMe = currentUser && (targetProfileUser.id === currentUser.id);
+                const banner = targetProfileUser.banner || "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=2070&auto=format&fit=crop";
+                const editBtn = isMe ? `<button onclick="openEditModal()" class="bg-white/20 backdrop-blur-md border border-white/40 text-white px-6 py-2 rounded-full font-bold text-sm hover:bg-white hover:text-black transition-colors">Edit Profile</button>` : `<button class="bg-white text-black px-6 py-2 rounded-full font-bold text-sm cursor-default">Viewing</button>`;
+                
+                main.innerHTML = `
+                    <div class="relative w-full h-[320px] rounded-[2.5rem] overflow-hidden shadow-soft mb-8 group">
+                        <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('${banner}')"></div><div class="absolute inset-0 banner-gradient"></div>
+                        <div class="absolute bottom-0 left-0 p-10 w-full flex items-end justify-between">
+                            <div class="text-white max-w-2xl"><h1 class="text-6xl font-black mb-2 tracking-tight drop-shadow-lg">${targetProfileUser.name}</h1><p class="text-lg opacity-90 font-medium drop-shadow-md mb-6">${targetProfileUser.bio}</p>${editBtn}</div>
+                            <div class="hidden md:block w-40 h-40 rounded-full border-4 border-white shadow-2xl overflow-hidden bg-white mb-[-20px] mr-10 relative z-10"><div class="w-full h-full flex items-center justify-center text-6xl font-bold text-white" style="background-color: ${targetProfileUser.color}">${targetProfileUser.name[0].toUpperCase()}</div></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        <div class="space-y-6"><div class="widget-card"><h3 class="font-bold text-lg mb-4">About</h3><div class="space-y-3"><div class="flex items-center gap-3 text-sm text-slate-600"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"><i class="ph-bold ph-at"></i></div><span>${targetProfileUser.id}</span></div></div></div></div>
+                        <div class="lg:col-span-2 space-y-6"><div class="flex items-center justify-between border-b border-slate-200 pb-4 overflow-x-auto"><div class="flex gap-6 whitespace-nowrap"><button onclick="switchProfileTab('all')" class="text-xl font-bold transition-colors hover-target ${profileTab==='all'?'text-slate-900':'text-slate-400'}">All</button><button onclick="switchProfileTab('media')" class="text-xl font-bold transition-colors hover-target ${profileTab==='media'?'text-slate-900':'text-slate-400'}">Media</button><button onclick="switchProfileTab('favorites')" class="text-xl font-bold transition-colors hover-target ${profileTab==='favorites'?'text-slate-900':'text-slate-400'}">Favorites</button><button onclick="switchProfileTab('comments')" class="text-xl font-bold transition-colors hover-target ${profileTab==='comments'?'text-slate-900':'text-slate-400'}">Comments</button></div></div><div id="profile-posts-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div></div>
+                    </div>
+                `;
+                renderProfilePosts();
+            }
+            gsap.from("#main-content > *", { opacity: 0, y: 20, stagger: 0.1, duration: 0.6, ease: "power2.out" });
+        }
+
+        // --- SEARCH LOGIC ---
+        function handleSearchInput(input) {
+            const query = input.value.trim().toLowerCase();
+            currentSearchQuery = query;
+            const filterContainer = document.getElementById('search-filters');
+            
+            if (query.length > 0) {
+                filterContainer.classList.remove('hidden');
+                performSearch();
+            } else {
+                filterContainer.classList.add('hidden');
+                document.getElementById('search-results').innerHTML = `<div class="text-center py-20 text-slate-400">Try searching for something...</div>`;
+            }
+        }
+
+        function runSearch(tag) {
+            const input = document.getElementById('search-input');
+            input.value = tag;
+            handleSearchInput(input);
+        }
+
+        function setSearchFilter(filter) {
+            searchFilter = filter;
+            // Update UI
+            ['latest', 'popular', 'media'].forEach(f => {
+                const btn = document.getElementById(`filter-${f}`);
+                if (f === filter) {
+                    btn.classList.remove('bg-white', 'text-slate-500'); btn.classList.add('bg-slate-900', 'text-white');
+                } else {
+                    btn.classList.add('bg-white', 'text-slate-500'); btn.classList.remove('bg-slate-900', 'text-white');
+                }
+            });
+            performSearch();
+        }
+
+        function performSearch() {
+            const grid = document.getElementById('search-results');
+            let results = posts.filter(p => p.content.toLowerCase().includes(currentSearchQuery));
+
+            // Filtering
+            if (searchFilter === 'media') results = results.filter(p => p.image);
+            
+            // Sorting
+            if (searchFilter === 'popular') {
+                results.sort((a, b) => (b.likes ? b.likes.length : 0) - (a.likes ? a.likes.length : 0));
+            } else {
+                // Default Latest (by ID desc)
+                results.sort((a, b) => b.id - a.id);
+            }
+
+            grid.innerHTML = "";
+            if (results.length === 0) {
+                grid.innerHTML = `<div class="text-center py-20 text-slate-400 font-bold">No results found for "${currentSearchQuery}"</div>`;
+            } else {
+                results.forEach(p => grid.appendChild(createPostCard(p)));
+            }
+        }
+
+        // --- UI COMPONENTS ---
+        function createTrendItem(r, t, c) {
+            return `<div class="flex items-center justify-between group cursor-pointer hover-target" onclick="runSearch('${t}')"><div class="flex items-center gap-4"><span class="text-lg font-black text-slate-300 w-4 group-hover:text-slate-900 transition-colors">${r}</span><div><p class="font-bold text-sm text-slate-800 group-hover:text-blue-600 transition-colors">${t}</p><p class="text-xs text-slate-400">${c}</p></div></div><i class="ph-bold ph-caret-right text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity"></i></div>`;
+        }
+
+        function createPostCard(data, isCompact = false) {
+            const div = document.createElement('div');
+            div.className = `bg-white rounded-[1.5rem] overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300 group cursor-default border border-slate-100 flex flex-col`;
+            div.id = `post-${data.id}`;
+            const imgHeight = isCompact ? 'h-48' : 'h-[400px]';
+            const imgHtml = data.image ? `<div class="w-full ${imgHeight} bg-slate-100 overflow-hidden cursor-pointer"><img src="${data.image}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"></div>` : '';
+            const isLiked = currentUser && data.likes && data.likes.includes(currentUser.id);
+            const likeClass = isLiked ? 'text-red-500 ph-heart-fill' : 'text-slate-400 ph-heart';
+            const deleteBtn = (currentUser && data.userId === currentUser.id) ? `<button onclick="openDeleteModal(${data.id})" class="ml-auto text-slate-300 hover:text-red-500 hover-target transition-colors"><i class="ph-bold ph-trash text-lg"></i></button>` : '';
+            
+            // Hashtag highlighting
+            const formattedContent = data.content.replace(/#[\w가-힣]+/g, (match) => `<span class="hashtag" onclick="switchPage('search'); setTimeout(()=>runSearch('${match}'), 100)">${match}</span>`);
+
+            div.innerHTML = `${imgHtml}<div class="p-6 flex-1 flex flex-col"><div class="flex items-center gap-3 mb-3"><div class="w-8 h-8 rounded-full text-white flex items-center justify-center font-bold text-xs shadow-sm cursor-pointer hover-target" style="background-color:${getUserColor(data.userId)}" onclick="switchPage('profile','${data.userId}')">${data.name[0]}</div><div class="cursor-pointer hover-target" onclick="switchPage('profile','${data.userId}')"><p class="font-bold text-sm leading-tight hover:underline">${data.name}</p><p class="text-[10px] text-slate-400">@${data.userId}</p></div><span class="ml-auto text-[10px] font-bold text-slate-300 bg-slate-50 px-2 py-1 rounded-md">${data.time}</span></div><p class="text-slate-700 text-sm leading-relaxed line-clamp-3 font-medium mb-4 flex-1">${formattedContent}</p><div class="flex items-center gap-6 border-t border-slate-50 pt-4 mt-auto"><button onclick="toggleLike(${data.id}, this)" class="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors hover-target group/btn"><i class="ph text-xl ${likeClass} transition-transform group-active/btn:scale-75"></i><span class="like-count">${data.likes?data.likes.length:0}</span></button><button onclick="openComments(${data.id})" class="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors hover-target"><i class="ph ph-chat-circle text-xl"></i><span>${data.comments?data.comments.length:0}</span></button>${deleteBtn}</div></div>`;
+            return div;
+        }
+
+        function switchProfileTab(t){profileTab=t; renderContent('profile');}
+        function renderProfilePosts() {
+            if(!targetProfileUser) return; const grid=document.getElementById('profile-posts-grid'); grid.innerHTML=""; let items=[];
+            if(profileTab==='comments') posts.forEach(p=>{if(p.comments) p.comments.forEach(c=>{if(c.userId===targetProfileUser.id) items.push({type:'comment',data:c,originPost:p});})});
+            else { if(profileTab==='all') items=posts.filter(p=>p.userId===targetProfileUser.id).map(p=>({type:'post',data:p})); else if(profileTab==='media') items=posts.filter(p=>p.userId===targetProfileUser.id && p.image).map(p=>({type:'post',data:p})); else items=posts.filter(p=>p.likes&&p.likes.includes(targetProfileUser.id)).map(p=>({type:'post',data:p})); }
+            if(items.length===0) grid.innerHTML=`<div class="col-span-2 text-center py-20 text-slate-400 bg-white rounded-3xl border border-dashed border-slate-200 font-bold">No content.</div>`;
+            else items.forEach(i=>{if(i.type==='post')grid.appendChild(createPostCard(i.data,true)); else grid.appendChild(createCommentCard(i.data,i.originPost));});
+        }
+        function createCommentCard(c,p){const d=document.createElement('div');d.className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-slate-100 flex flex-col";d.innerHTML=`<div class="flex items-center gap-2 mb-2"><i class="ph-bold ph-arrow-bend-down-right text-slate-300"></i><span class="text-xs text-slate-400">Replied to <span class="font-bold text-slate-700">@${p.userId}</span></span></div><p class="text-slate-800 font-medium text-sm mb-4 flex-1">"${c.text}"</p><div class="mt-auto bg-slate-50 p-3 rounded-xl flex gap-3 items-center opacity-70"><div class="w-8 h-8 bg-slate-200 rounded-lg overflow-hidden shrink-0">${p.image?`<img src="${p.image}" class="w-full h-full object-cover">`:`<div class="w-full h-full flex items-center justify-center text-xs font-bold text-slate-400">T</div>`}</div><div class="overflow-hidden"><p class="text-xs font-bold text-slate-700 truncate">${p.content}</p></div></div>`;return d;}
+        
+        // ================= INTERACTIONS & MODALS =================
+        function getUserColor(uid) { const u = users.find(user => user.id === uid); return u ? u.color : '#000'; }
+        function toggleLike(pid,b){if(!requireAuth())return; const p=posts.find(x=>x.id===pid);if(!p.likes)p.likes=[];const i=b.querySelector('i'),s=b.querySelector('.like-count'),idx=p.likes.indexOf(currentUser.id);if(idx===-1){p.likes.push(currentUser.id);i.className="ph-fill ph-heart-fill text-xl text-red-500 animate-like";}else{p.likes.splice(idx,1);i.className="ph ph-heart text-xl text-slate-400";}s.innerText=p.likes.length;saveAll();}
+        function openComments(pid){if(!requireAuth())return; currentOpenPostId=pid;const p=posts.find(x=>x.id===pid),l=document.getElementById('comment-list');l.innerHTML="";if(!p.comments||p.comments.length===0)l.innerHTML=`<div class="text-center text-slate-400 py-10 font-bold">No comments yet.</div>`;else p.comments.forEach(c=>{const d=document.createElement('div');d.className="flex gap-3 mb-4 animate-fade-in";d.innerHTML=`<div class="w-8 h-8 rounded-full text-white flex items-center justify-center text-xs font-bold shrink-0" style="background-color:${getUserColor(c.userId)}">${c.name[0]}</div><div class="bg-slate-50 p-3 rounded-2xl rounded-tl-none"><div class="flex justify-between items-baseline mb-1"><span class="font-bold text-xs">${c.name}</span><span class="text-[10px] text-slate-400 ml-2">${c.time}</span></div><p class="text-sm text-slate-800 font-medium">${c.text}</p></div>`;l.appendChild(d);});document.getElementById('comment-drawer').classList.add('open');}
+        function closeComments(){document.getElementById('comment-drawer').classList.remove('open');currentOpenPostId=null;}
+        function submitComment(){if(!requireAuth())return;const i=document.getElementById('comment-input'),t=i.value.trim();if(!t||!currentOpenPostId)return;const p=posts.find(x=>x.id===currentOpenPostId);if(!p.comments)p.comments=[];p.comments.push({userId:currentUser.id,name:currentUser.name,text:t,time:"Just now"});saveAll();i.value="";openComments(currentOpenPostId);const c=document.getElementById(`post-${currentOpenPostId}`);if(c){const cb=c.querySelectorAll('button')[1];if(cb)cb.querySelector('span').innerText=p.comments.length;}}
+        function openDeleteModal(id){deleteTargetId=id;document.getElementById('delete-modal').classList.remove('hidden');gsap.to('#delete-modal',{opacity:1,duration:0.2});gsap.fromTo('#delete-modal > div',{scale:0.9,y:20},{scale:1,y:0,duration:0.3,ease:"back.out"});}
+        function closeDeleteModal(){gsap.to('#delete-modal',{opacity:0,duration:0.2,onComplete:()=>{document.getElementById('delete-modal').classList.add('hidden');deleteTargetId=null;}});}
+        function confirmDelete(){if(!deleteTargetId)return;posts=posts.filter(p=>p.id!==deleteTargetId);saveAll();const el=document.getElementById(`post-${deleteTargetId}`);if(el)gsap.to(el,{height:0,opacity:0,margin:0,padding:0,duration:0.5,onComplete:()=>el.remove()});closeDeleteModal();}
+        function createPostModal(){if(!requireAuth())return;document.getElementById('write-modal').classList.remove('hidden');gsap.to('#write-modal',{opacity:1,duration:0.2});gsap.fromTo('#write-modal > div',{scale:0.95,y:20},{scale:1,y:0,duration:0.3,ease:"back.out"});}
+        function closeWriteModal(){gsap.to('#write-modal',{opacity:0,duration:0.2,onComplete:()=>{document.getElementById('write-modal').classList.add('hidden');document.getElementById('post-content').value="";clearImage();}});}
+        function createPost(){if(!requireAuth())return;const c=document.getElementById('post-content').value,i=document.getElementById('image-preview').src,h=!document.getElementById('image-preview-area').classList.contains('hidden');if(!c&&!h)return;const np={id:Date.now(),userId:currentUser.id,name:currentUser.name,content:c,image:h?i:null,time:"Now",likes:[],comments:[]};posts.unshift(np);saveAll();closeWriteModal();if(currentView==='home'||currentView==='profile')renderContent(currentView);}
+        function openEditModal(){if(!requireAuth())return;document.getElementById('edit-name').value=currentUser.name;document.getElementById('edit-bio').value=currentUser.bio||"";document.getElementById('edit-banner').value=currentUser.banner||"";tempColor=currentUser.color||'#000';document.getElementById('edit-modal').classList.remove('hidden');gsap.to('#edit-modal',{opacity:1,duration:0.2});}
+        function closeEditModal(){gsap.to('#edit-modal',{opacity:0,duration:0.2,onComplete:()=>document.getElementById('edit-modal').classList.add('hidden')});}
+        function setEditColor(c){tempColor=c;}
+        function saveProfileChanges(){currentUser.name=document.getElementById('edit-name').value;currentUser.bio=document.getElementById('edit-bio').value;currentUser.banner=document.getElementById('edit-banner').value;currentUser.color=tempColor;const idx=users.findIndex(u=>u.id===currentUser.id);if(idx!==-1)users[idx]=currentUser;saveAll();closeEditModal();renderContent(currentView);updateSidebar();}
+        function handleImageSelect(i){if(i.files[0]){const r=new FileReader();r.onload=(e)=>{document.getElementById('image-preview').src=e.target.result;document.getElementById('image-preview-area').classList.remove('hidden');};r.readAsDataURL(i.files[0]);}}
+        function clearImage(){document.getElementById('file-upload').value="";document.getElementById('image-preview-area').classList.add('hidden');}
+        
+        // Init
+        const cd=document.querySelector('.cursor-dot'),co=document.querySelector('.cursor-outline');
+        window.addEventListener("mousemove",e=>{gsap.to(cd,{x:e.clientX,y:e.clientY,duration:0.1});gsap.to(co,{x:e.clientX,y:e.clientY,duration:0.4});});
+        document.querySelectorAll('.hover-target').forEach(el=>{el.addEventListener('mouseenter',()=>{co.classList.add('cursor-hover');});el.addEventListener('mouseleave',()=>{co.classList.remove('cursor-hover');});});
+        window.onload=()=>{gsap.from(".digit-1",{y:200,opacity:0,duration:1.5,ease:"power4.out"});gsap.from(".digit-0",{y:200,opacity:0,duration:1.5,ease:"power4.out",delay:0.2});gsap.to(".auth-ui",{opacity:1,duration:1,delay:1});};
+    </script>
+</body>
+</html>
